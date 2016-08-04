@@ -50,14 +50,12 @@ SummaryComparator::SummaryComparator(const char* basename1, const char* basename
 }
 
 
-
 SummaryComparator::~SummaryComparator(){
     ecl_sum_free(ecl_sum1);
     ecl_sum_free(ecl_sum2);
     stringlist_free(keys1);
     stringlist_free(keys2);
 }
-
 
 
 Deviation SummaryComparator::calculateDeviations(double val1, double val2){
@@ -73,7 +71,6 @@ Deviation SummaryComparator::calculateDeviations(double val1, double val2){
 }
 
 
-
 void SummaryComparator::setTimeVecs(std::vector<double> &timeVec1,std::vector<double> &timeVec2){
     timeVec1.reserve(ecl_sum_get_data_length(ecl_sum1));
     for (int time_index = 0; time_index < ecl_sum_get_data_length(ecl_sum1); time_index++){
@@ -84,7 +81,6 @@ void SummaryComparator::setTimeVecs(std::vector<double> &timeVec1,std::vector<do
         timeVec2.push_back(ecl_sum_iget_sim_days(ecl_sum2 , time_index ));
     }
 }
-
 
 
 void SummaryComparator::getDataVecs(std::vector<double> &dataVec1,std::vector<double> &dataVec2,const char* keyword){
@@ -100,7 +96,6 @@ void SummaryComparator::getDataVecs(std::vector<double> &dataVec1,std::vector<do
 }
 
 
-
 void SummaryComparator::setDataSets(std::vector<double> &timeVec1,std::vector<double> &timeVec2){
     if(timeVec1.size()< timeVec2.size()){
         ecl_sum_fileShort = this->ecl_sum1;
@@ -111,7 +106,6 @@ void SummaryComparator::setDataSets(std::vector<double> &timeVec1,std::vector<do
         ecl_sum_fileLong = this->ecl_sum1;
     }
 }
-
 
 
 void SummaryComparator::chooseReference(std::vector<double> &timeVec1,std::vector<double> &timeVec2,std::vector<double> &dataVec1,std::vector<double> &dataVec2){
@@ -130,7 +124,6 @@ void SummaryComparator::chooseReference(std::vector<double> &timeVec1,std::vecto
 }
 
 
-
 void SummaryComparator::getDeviation(size_t refIndex, size_t &checkIndex, Deviation &dev){
     if((*referenceVec)[refIndex] == (*checkVec)[checkIndex]){
         dev = SummaryComparator::calculateDeviations((*referenceDataVec)[refIndex], (*checkDataVec)[checkIndex]);
@@ -138,7 +131,10 @@ void SummaryComparator::getDeviation(size_t refIndex, size_t &checkIndex, Deviat
         return;
     }
     else if((*referenceVec)[refIndex]<(*checkVec)[checkIndex]){
-        double value = SummaryComparator::unitStep((*checkDataVec)[checkIndex-1]);
+        double value = SummaryComparator::unitStep((*checkDataVec)[checkIndex]);
+        /*Must be a little careful here. Flow writes out old value first,
+          than changes value. Say there should be a change in production rate from A to B at timestep 300.
+          Then the data of time step 300 is A and the next timestep will have value B. Must use the upper limit. */
         dev = SummaryComparator::calculateDeviations((*referenceDataVec)[refIndex], value);
         checkIndex++;
         return;
@@ -153,43 +149,6 @@ void SummaryComparator::getDeviation(size_t refIndex, size_t &checkIndex, Deviat
 }
 
 
-
-double SummaryComparator::average(std::vector<double> &vec){
-    return std::accumulate(vec.begin(), vec.end(), 0.0) / vec.size();
-}
-
-
-
-double SummaryComparator::interpolation(double check_value, double check_value_prev , double time_array[3]){
-    //does a Linear Polation
-    double time_check = time_array[0]; //From the check time vector
-    double time_check_prev = time_array[1];//From the check time vector
-    double time_reference = time_array[2];// The time of interest, from the reference vector
-    double sloap, factor, lp_value;
-    sloap = (check_value - check_value_prev)/double(time_check - time_check_prev);
-    factor = (time_reference - time_check_prev)/double(time_check - time_check_prev);
-    lp_value = check_value_prev + factor*sloap*(time_check - time_check_prev);
-    return lp_value;
-}
-
-
-
-double SummaryComparator::median(std::vector<double> vec) {
-    // Sorts and returns the median in a std::vector<double>
-    if(vec.empty()){
-        return 0;
-    }
-    else {
-        std::sort(vec.begin(), vec.end());
-        if(vec.size() % 2 == 0)
-            return (vec[vec.size()/2 - 1] + vec[vec.size()/2]) / 2;
-        else
-            return vec[vec.size()/2];
-    }
-}
-
-
-
 void SummaryComparator::printUnits(){
     std::vector<double> timeVec1, timeVec2;
     setTimeVecs(timeVec1, timeVec2);  // Sets the time vectors, they are equal for all keywords (WPOR:PROD01 etc)
@@ -200,13 +159,72 @@ void SummaryComparator::printUnits(){
 }
 
 
-
 const char* SummaryComparator::getUnit(const char* keyword){
-    return ecl_sum_get_unit(ecl_sum_fileShort, keyword); //Called only when the keywords are equal in the getDeviations()-function
+    return ecl_sum_get_unit(ecl_sum_fileShort, keyword);
+    //Called only when the keywords are equal in the getDeviations()-function
 }
 
 
+void SummaryComparator::printKeywords(){
+    size_t ivar = 0;
+    std::vector<std::string> noMatchString;
+    std::cout << "Keywords that are common for the files:" << std::endl;
+    while(ivar < stringlist_get_size(keysLong)){
+        const char* keyword = stringlist_iget(keysLong, ivar);
+        if (stringlist_contains(keysLong, keyword) && stringlist_contains(keysShort, keyword)){
+            std::cout << keyword << std::endl;
+            ivar++;
+        }
+        else{
+            noMatchString.push_back(keyword);
+            ivar++;
+        }
+    }
+    if(noMatchString.size() == 0){
+        std::cout << "No keywords were different" << std::endl;
+        return;
+    }
+    std::cout << "Keywords that are different: " << std::endl;
+    for (const auto& it : noMatchString) std::cout << it << std::endl;
 
-double SummaryComparator::unitStep(double value){
-    return value;
+    std::cout << "\nOf the " << stringlist_get_size(keysLong) << " keywords " << stringlist_get_size(keysLong)-noMatchString.size() << " were equal and " << noMatchString.size() << " were different" << std::endl;
+}
+
+
+void SummaryComparator::printDataOfSpecificKeyword(std::vector<double> &timeVec1,std::vector<double> &timeVec2, const char* keyword){
+    std::vector<double> dataVec1, dataVec2;
+
+    getDataVecs(dataVec1,dataVec2,keyword);
+    chooseReference(timeVec1, timeVec2,dataVec1,dataVec2);
+    size_t ivar = 0;
+    size_t jvar = 0;
+    const char separator = ' ';
+    const int numWidth = 14;
+    std::cout << std::left << std::setw(numWidth) << std::setfill(separator) << "Time";
+    std::cout << std::left << std::setw(numWidth) << std::setfill(separator) << "Ref data";
+    std::cout << std::left << std::setw(numWidth) << std::setfill(separator) << "Check data" << std::endl;
+
+    while(ivar < referenceVec->size()){
+        if(ivar == referenceVec->size() || jvar == checkVec->size() ){
+            break;
+        }
+        if((*referenceVec)[ivar] == (*checkVec)[jvar]){
+            std::cout << std::left << std::setw(numWidth) << std::setfill(separator) << (*referenceVec)[ivar];
+            std::cout << std::left << std::setw(numWidth) << std::setfill(separator) << (*referenceDataVec)[ivar];
+            std::cout << std::left << std::setw(numWidth) << std::setfill(separator) << (*checkDataVec)[jvar] << std::endl;
+            ivar++;
+            jvar++;
+        }else if((*referenceVec)[ivar] < (*checkVec)[jvar]){
+            std::cout << std::left << std::setw(numWidth) << std::setfill(separator) << (*referenceVec)[ivar];
+            std::cout << std::left << std::setw(numWidth) << std::setfill(separator) << (*referenceDataVec)[ivar];
+            std::cout << std::left << std::setw(numWidth) << std::setfill(separator) << "" << std::endl;
+            ivar++;
+        }
+        else{
+            std::cout << std::left << std::setw(numWidth) << std::setfill(separator) << (*checkVec)[jvar];
+            std::cout << std::left << std::setw(numWidth) << std::setfill(separator) << "";
+            std::cout << std::left << std::setw(numWidth) << std::setfill(separator) << (*checkDataVec)[jvar] << std::endl;
+            jvar++;
+        }
+    }
 }

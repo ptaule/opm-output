@@ -17,7 +17,11 @@
    along with OPM.  If not, see <http://www.gnu.org/licenses/>.
    */
 
+#ifndef SUMMARYCOMPARATOR_HPP
+#define SUMMARYCOMPARATOR_HPP
+
 #include <iostream>
+#include <iomanip>
 #include <vector>
 #include <algorithm>
 #include <string>
@@ -25,11 +29,10 @@
 //! \brief Prototyping struct, encapsuling the stringlist libraries.
 struct stringlist_struct;
 typedef struct stringlist_struct stringlist_type;
+
 //! \brief Prototyping struct, encapsuling the ert libraries.
 struct ecl_sum_struct;
 typedef struct ecl_sum_struct ecl_sum_type;
-
-
 
 
 //! \brief Struct for storing the deviation between two values.
@@ -37,8 +40,6 @@ struct Deviation {
     double abs = 0;//!< The absolute deviation
     double rel = 0; //!< The relative deviation
 };
-
-
 
 
 class SummaryComparator {
@@ -58,6 +59,8 @@ class SummaryComparator {
         std::vector<double> * referenceDataVec = nullptr; //!< For storing the data corresponding to each time step for the file containing the fewer time steps.
         std::vector<double> * checkVec         = nullptr; //!< For storing the values of each time step for the file containing the more time steps.
         std::vector<double> * checkDataVec     = nullptr; //!< For storing the data values corresponding to each time step for the file containing the more time steps.
+        bool printKeyword = false; //!< Boolean value for choosing whether to print the keywords or not
+        bool printSpecificKeyword = false; //!< Boolean value for choosing whether to print the vectors of a keyword or not
 
         //! \brief Calculate deviation between two data values and stores it in a Deviation struct.
         //! \param[in] refIndex Index in reference data
@@ -101,7 +104,16 @@ class SummaryComparator {
         //! \param[in] keyword The keyword of interest.
         //! \param[out] ret The unit of the keyword as a const char*.
         const char* getUnit(const char* keyword);
+
         void printUnits();
+
+        //! \brief Prints the keywords of the files.
+        //! \details The function prints first the common keywords, than the keywords that are different.
+        void printKeywords();
+
+        //! \brief Prints the summary vectors of the two files
+        //! \details The function requires that the summary vectors of the specific file have been read into the member variables referenceVec etc. .
+        void printDataOfSpecificKeyword(std::vector<double> &timeVec1,std::vector<double> &timeVec2, const char* keyword);
 
     public:
         //! \brief Creates an SummaryComparator class object
@@ -111,6 +123,7 @@ class SummaryComparator {
         //! \param[in] relativeTolerance The relative tolerance which is to be used in the test.
         //! \details The constructor creates an object of the class, and openes the files, an exception is thrown if the opening of the files fails. \n It creates stringlists, in which keywords are to be stored, and figures out which keylist that contains the more/less keywords. \n Also the private member variables aboluteTolerance and relativeTolerance are set.
         SummaryComparator(const char* basename1, const char* basename2, double absoluteTolerance, double relativeTolerance);
+
         //! \brief Destructor
         //! \details The destructor takes care of the allocated memory in which data has been stored.
         ~SummaryComparator();
@@ -121,20 +134,24 @@ class SummaryComparator {
         //! \param[out] ret Returns a Deviation struct.
         //! \details The function takes two values, calculates the absolute and relative deviation and returns the result as a Deviation struct.
         static Deviation calculateDeviations( double val1, double val2);
-        static double median(std::vector<double> vec);
 
-        //! \brief Function which linearly interpolates a value
-        //! \param[in] checkValue
-        //! \param[in] checkValuePrev
-        //! \param[in] timeArray[3] Array of doubles which contains the times of interest. \n timeArray[0]: The value of the time step in which checkVec exceeds the reference time, i.e. the first j which satisfies checkVec[j] > referenceVec[i].\n timeArray[1]: The value of the time step before checkVec exceeds referenceVec[i], i.e. checkVec[j-1].\n timeArray[2]: The value of the time step at which the comparison is to be comitted, i.e. referenceVec[i].
-        //! \param[out] ret Returns the interpolated value.
-        //! \details In this case: The interpolation generates a value from the principle of linear polation.
-        static double interpolation(double checkValue, double checkValuePrev, double timeArray[3]);
+        //! \brief Sets the private member variable printKeywords
+        //! \param[in] boolean Boolean value
+        //! \details The function sets the private member variable printKeywords. When it is true the function printKeywords will be called.
+        void setPrintKeywords(bool boolean){this->printKeyword = boolean;}
+
+        //! \brief Sets the private member variable printSpecificKeyword
+        //! \param[in] boolean Boolean value
+        //! \details The function sets the private member variable printSpecificKeyword. When true, the summary vector of the keyword for both files will be printed.
+        void setPrintSpecificKeyword(bool boolean){this->printSpecificKeyword = boolean;}
 
         //! \brief Unit step function
         //! \param[in] value The input value should be the last know value
         //! \param[out] ret Return the unit-step-function value.
         //! \details In this case: The unit step function is used when the data from the two data set, which is to be compared, don't match in time. \n The unit step function is then to be called on the #checkDataVec 's value at the last time step which is before the time of comparison.
-        static double unitStep(double value);//!< Returns a value based on the unit step principle.
-        static double average(std::vector<double> &vec);
+
+        static double unitStep(double value){return value;}//!< Returns a value based on the unit step principle.
+
 };
+
+#endif
